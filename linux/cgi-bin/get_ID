@@ -1,0 +1,100 @@
+#!/bin/sh
+
+# ID provider for Adempiere distributed development
+# this is intended to be a replacement of AD_Sequence table for Adempiere development
+# and/or custom project distributed development
+#
+# Author: Carlos Ruiz (globalqss) 2007/10/13
+# Changelog:
+#  2007/11/08 - Carlos Ruiz (globalqss)
+#       Add custom project management of sequences
+#  2007/12/05 - Carlos Ruiz (globalqss)
+#       Add generation of file to notify
+
+. ./bashlib
+
+# Must be called with variables
+# USER (developer UserID)
+# PASSWORD (developer password)
+# PROJECT (to allow custom project ID management)
+# TABLE (table for the ID)
+# ALTKEY (Alternate key - still not used - to verify alternate key collisions)
+# COMMENT (Comment for the ID)
+
+# Files in ../data
+# Project/Tablename.log (i.e. Adempiere/AD_Column.log) -> Log of ID's assignments
+# Project/Tablename.seq -> current sequence
+# Project/Tablename.lock -> temporary lock
+# Project/RegisteredDevelopers.pwd -> Passwords for registered developers
+
+echo Content-type: text/html
+echo ""
+
+if [ "x$FORM_USER" = "x" -o "x$FORM_PASSWORD" = "x" -o "x$FORM_TABLE" = "x" -o "x$FORM_PROJECT" = "x" ]
+then
+    echo "ERROR: Required parameters user, password, table, project"
+    exit 1
+fi
+
+# TODO: Verify identity (auth)
+FILEPWD=../data/${FORM_PROJECT}/RegisteredDevelopers.pwd
+FOUNDLINE=`fgrep "$FORM_USER|$FORM_PASSWORD" $FILEPWD | wc -l`
+if [ $FOUNDLINE -ne 1 ]
+then
+    echo "ERROR: Not registered developer"
+    exit 1
+fi
+
+# TODO: Verify collision of alt-key
+
+# Get Current ID from Table
+FILE=../data/${FORM_PROJECT}/${FORM_TABLE}.seq
+FILELOCK=../data/${FORM_PROJECT}/${FORM_TABLE}.lock
+FILELOG=../data/${FORM_PROJECT}/${FORM_TABLE}.log
+FILENOTIFY=../data/${FORM_PROJECT}/${FORM_PROJECT}.notify
+
+while [ -r $FILELOCK ]
+do
+   sleep 1
+done
+> $FILELOCK
+
+if [ "x$FORM_PROJECT" = "xAdempiere" ]
+then
+    INITIALID=50000
+else
+    INITIALID=1000000
+fi
+
+if [ -s $FILE ]
+then
+    ID=`cat $FILE`
+else
+    ID=$INITIALID
+fi
+if [ "x$ID" = x ]
+then
+    ID=$INITIALID
+fi
+if [ "$ID" -lt $INITIALID ]
+then
+    ID=$INITIALID
+fi
+while true
+do
+    # Increment the ID and verify it against the log (to allow usage of holes on mistakes)
+    NEXTID=`expr $ID + 1`
+    CNTINLOG=`grep "^$ID|" $FILELOG | wc -l`
+    if [ $CNTINLOG -le 0 ]
+    then
+        break
+    fi
+done
+echo $NEXTID > $FILE
+DATE=`date +'%Y/%m/%d %H:%M:%S'`
+echo "$ID|$FORM_USER|$DATE|$FORM_ALTKEY|$FORM_COMMENT" >> $FILELOG
+echo "Reserved ${FORM_TABLE}_ID $ID from $FORM_USER at $DATE : $FORM_COMMENT" >> $FILENOTIFY
+rm $FILELOCK
+
+echo "$ID"
+exit 0

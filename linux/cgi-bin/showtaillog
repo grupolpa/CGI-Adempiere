@@ -1,0 +1,32 @@
+#!/bin/sh
+
+. ./bashlib
+
+TAIL="/usr/bin/tail"
+TAILPRM="-30"
+CAT="/usr/bin/tac"
+
+echo Content-type: text/plain
+echo ""
+
+if [ "x$FORM_PROJECT" = "x" ]
+then
+    FORM_PROJECT="Adempiere" # default
+fi
+
+if [ "x$FORM_TABLE" = "x" ]
+then
+    FORM_TABLE=$1
+    if [ "x$FORM_TABLE" = "x" ]
+    then
+        echo "ERROR: Required parameter table"
+        exit 1
+    fi
+fi
+
+if [ -x $TAIL -a -x $CAT ]
+then
+        $TAIL $TAILPRM ../data/${FORM_PROJECT}/${FORM_TABLE}.log | $CAT
+else
+        echo Cannot find command $TAIL or $CAT on this system.
+fi
